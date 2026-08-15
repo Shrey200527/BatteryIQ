@@ -23,3 +23,20 @@ BatteryIQ is an AI/ML-based battery diagnostic system designed to estimate batte
 - `models/` — trained ML models
 - `dashboard/` — Streamlit application
 - `reports/` — project documentation
+
+## Dataset Setup
+
+BatteryIQ uses the NASA Ames PCoE Li-ion Battery Aging Dataset.
+https://phm-datasets.s3.amazonaws.com/NASA/5.+Battery+Data+Set.zip?utm_source=chatgpt.com
+Required battery files:
+
+- B0005.mat
+- B0006.mat
+- B0007.mat
+- B0018.mat
+
+Download the official dataset from NASA and place these files in:
+
+data/raw/
+
+The raw dataset is excluded from Git tracking through `.gitignore`.
