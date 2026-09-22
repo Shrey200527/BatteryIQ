@@ -1,0 +1,31 @@
+{
+  "model_name": "BatteryIQ_GRU_RUL",
+  "model_type": "GRU",
+  "target": "rul",
+  "target_unit": "cycles",
+  "feature_columns": [
+    "voltage_mean",
+    "voltage_min",
+    "voltage_max",
+    "voltage_std",
+    "current_mean",
+    "current_min",
+    "current_max",
+    "temperature_mean",
+    "temperature_max",
+    "current_load_mean",
+    "voltage_load_mean",
+    "cycle_time",
+    "voltage_change",
+    "temperature_change",
+    "temperature_rolling_mean"
+  ],
+  "sequence_length": 10,
+  "training_sequences": 304,
+  "validation_method": "Leave-One-Battery-Out",
+  "epochs": 50,
+  "batch_size": 16,
+  "random_state": 42,
+  "eol_threshold_soh": 70.0,
+  "inference_input": "10 consecutive cycles from one battery"
+}
