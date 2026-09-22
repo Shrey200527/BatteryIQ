@@ -35,6 +35,10 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+from src.rul.rul_inference import (
+    predict_rul as _predict_rul,
+)
+
 from src.classification.condition_classifier import (
     classify_condition as _classify_condition,
 )
@@ -257,25 +261,39 @@ def predict_soh(input_data: Any) -> dict:
     }
 
 
-def predict_rul(input_data: Any) -> dict:
+def predict_rul(
+    input_data: Any,
+    model: str = "xgboost",
+) -> dict:
     """
     Predict Remaining Useful Life.
 
-    RUL deployment artifacts have not yet been committed by the
-    RUL model owners. Inference must not retrain a model or fabricate
-    a prediction.
+    Parameters
+    ----------
+    input_data:
+        Input feature record(s) for XGBoost, or a 10-cycle
+        feature sequence for LSTM/GRU.
 
-    Raises
-    ------
-    RuntimeError
-        Until a validated RUL deployment artifact and loader are available.
+    model:
+        RUL model to use:
+            - "xgboost"
+            - "lstm"
+            - "gru"
+
+    Returns
+    -------
+    dict
+        Structured RUL inference result.
+
+    Notes
+    -----
+    Inference only loads validated deployment artifacts.
+    No model is retrained during inference.
     """
 
-    raise RuntimeError(
-        "RUL inference is not yet available. "
-        "Validated deployment artifacts and a model-loading interface "
-        "for the RUL model are required. No RUL model is retrained "
-        "during inference."
+    return _predict_rul(
+        input_data=input_data,
+        model=model,
     )
 
 
