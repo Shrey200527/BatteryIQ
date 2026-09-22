@@ -1,0 +1,40 @@
+{
+  "model_name": "BatteryIQ_ANN_SOH",
+  "target": "soh",
+  "features": [
+    "voltage_mean",
+    "voltage_min",
+    "voltage_max",
+    "voltage_std",
+    "current_mean",
+    "current_min",
+    "current_max",
+    "temperature_mean",
+    "temperature_max",
+    "current_load_mean",
+    "voltage_load_mean",
+    "cycle_time",
+    "voltage_change",
+    "temperature_change",
+    "temperature_rolling_mean"
+  ],
+  "random_seed": 42,
+  "architecture": [
+    "Dense(64, relu)",
+    "Dropout(0.20)",
+    "Dense(32, relu)",
+    "Dropout(0.10)",
+    "Dense(16, relu)",
+    "Dense(1, linear)"
+  ],
+  "optimizer": "Adam(learning_rate=0.001)",
+  "loss": "MSE",
+  "target_scaling": "StandardScaler fitted on training target inside each LOGO fold",
+  "epochs_max": 500,
+  "batch_size": 16,
+  "early_stopping_patience": 40,
+  "reduce_lr_on_plateau": true,
+  "deployment_training_rows": 636,
+  "validation_method": "Leave-One-Battery-Out (LOGO)",
+  "eol_threshold_percent": 70.0
+}
