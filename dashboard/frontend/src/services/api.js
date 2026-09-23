@@ -1,5 +1,6 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
 /**
  * Fetch all available batteries.
  */
@@ -10,11 +11,7 @@ export async function getBatteries() {
     throw new Error("Failed to fetch batteries.");
   }
 
-  const data = await response.json();
-
-  console.log("Battery API response:", data);
-
-  return data;
+  return response.json();
 }
 
 /**
@@ -29,11 +26,99 @@ export async function getBatteryInfo(batteryId) {
     throw new Error(`Failed to fetch information for ${batteryId}.`);
   }
 
-  const data = await response.json();
+  return response.json();
+}
 
-  console.log("Battery info response:", data);
+/**
+ * Fetch dashboard-ready historical data.
+ */
+export async function getBatteryHistory(batteryId) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/batteries/${batteryId}/history`
+  );
 
-  return data;
+  if (!response.ok) {
+    throw new Error(`Failed to fetch history for ${batteryId}.`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch the latest complete ML feature vector.
+ */
+export async function getLatestFeatures(batteryId) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/batteries/${batteryId}/latest-features`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch latest features for ${batteryId}.`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Predict SOH for a battery cycle.
+ */
+export async function getSohPrediction(batteryId, cycle, features) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/predict/soh`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        battery_id: batteryId,
+        cycle,
+        features,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch SOH prediction.");
+  }
+
+  return response.json();
+}
+
+/**
+ * Predict RUL using XGBoost.
+ *
+ * XGBoost uses a single cycle's feature vector.
+ */
+export async function getRulPrediction(
+  batteryId,
+  model,
+  features
+) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/predict/rul`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        battery_id: batteryId,
+        model,
+        features,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(
+      errorData?.detail?.message ||
+        "Failed to fetch RUL prediction."
+    );
+  }
+
+  return response.json();
 }
 
 /**
@@ -47,9 +132,7 @@ export async function getBatteryCondition(soh) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        soh,
-      }),
+      body: JSON.stringify({ soh }),
     }
   );
 
@@ -57,17 +140,17 @@ export async function getBatteryCondition(soh) {
     throw new Error("Failed to fetch battery condition.");
   }
 
-  const data = await response.json();
-
-  console.log("Condition API response:", data);
-
-  return data;
+  return response.json();
 }
 
 /**
- * Get SHAP feature contributions for a battery cycle.
+ * Get SHAP feature contributions.
  */
-export async function getShapExplanation(batteryId, cycle, features) {
+export async function getShapExplanation(
+  batteryId,
+  cycle,
+  features
+) {
   const response = await fetch(
     `${API_BASE_URL}/api/predict/explain`,
     {
@@ -77,8 +160,8 @@ export async function getShapExplanation(batteryId, cycle, features) {
       },
       body: JSON.stringify({
         battery_id: batteryId,
-        cycle: cycle,
-        ...features,
+        cycle,
+        features,
       }),
     }
   );
@@ -87,55 +170,5 @@ export async function getShapExplanation(batteryId, cycle, features) {
     throw new Error("Failed to fetch SHAP explanation.");
   }
 
-  const data = await response.json();
-
-  console.log("SHAP API response:", data);
-
-  return data;
-}
-
-/**
- * Get historical information for a battery.
- */
-export async function getBatteryHistory(batteryId) {
-  const response = await fetch(
-    `${API_BASE_URL}/api/batteries/${batteryId}/history`
-  );
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch history for ${batteryId}.`);
-  }
-
-  const data = await response.json();
-
-  console.log("Battery history response:", data);
-
-  return data;
-}
-
-export async function getSohPrediction(batteryId, cycle, features) {
-  const response = await fetch(
-    `${API_BASE_URL}/api/predict/soh`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        battery_id: batteryId,
-        cycle: cycle,
-        ...features,
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch SOH prediction.");
-  }
-
-  const data = await response.json();
-
-  console.log("SOH prediction response:", data);
-
-  return data;
+  return response.json();
 }
