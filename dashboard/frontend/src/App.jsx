@@ -35,8 +35,6 @@ function App() {
   // -----------------------------
 
   const [loading, setLoading] = useState(true);
-  const [infoLoading, setInfoLoading] = useState(false);
-  const [featuresLoading, setFeaturesLoading] = useState(false);
 
   const [error, setError] = useState("");
 
@@ -45,7 +43,6 @@ function App() {
   // -----------------------------
 
   const [sohPrediction, setSohPrediction] = useState(null);
-  const [sohLoading, setSohLoading] = useState(false);
   const [sohError, setSohError] = useState("");
 
   // -----------------------------
@@ -53,7 +50,6 @@ function App() {
   // -----------------------------
 
   const [rulPrediction, setRulPrediction] = useState(null);
-  const [rulLoading, setRulLoading] = useState(false);
   const [rulError, setRulError] = useState("");
 
   // -----------------------------
@@ -61,7 +57,7 @@ function App() {
   // -----------------------------
 
   const [featureContributions, setFeatureContributions] = useState([]);
-  const [shapLoading, setShapLoading] = useState(false);
+  const [shapReady, setShapReady] = useState(false);
   const [shapError, setShapError] = useState("");
 
   // -----------------------------
@@ -75,6 +71,57 @@ function App() {
   const [condition] = useState(null);
   const [conditionStatus] = useState("thresholds_pending");
   const [conditionLoading] = useState(false);
+
+  // Loading state is derived from the selected battery and request results.
+  // This avoids synchronous state updates inside effects.
+  const infoLoading = Boolean(
+    selectedBattery && !batteryInfo && !error
+  );
+  const featuresLoading = Boolean(
+    selectedBattery && !latestFeatures && !error
+  );
+  const sohLoading = Boolean(
+    selectedBattery &&
+      latestFeatures &&
+      batteryInfo &&
+      !sohPrediction &&
+      !sohError
+  );
+  const rulLoading = Boolean(
+    selectedBattery &&
+      latestFeatures &&
+      batteryInfo?.is_rul_valid &&
+      !rulPrediction &&
+      !rulError
+  );
+  const shapLoading = Boolean(
+    selectedBattery &&
+      latestFeatures &&
+      batteryInfo &&
+      !shapReady &&
+      !shapError
+  );
+
+  const handleBatteryChange = (event) => {
+    const batteryId = event.target.value;
+
+    setSelectedBattery(batteryId);
+    setError("");
+
+    setBatteryInfo(null);
+    setBatteryHistory(null);
+    setLatestFeatures(null);
+
+    setSohPrediction(null);
+    setSohError("");
+
+    setRulPrediction(null);
+    setRulError("");
+
+    setFeatureContributions([]);
+    setShapReady(false);
+    setShapError("");
+  };
 
   // ============================================================
   // Load available batteries
@@ -116,26 +163,7 @@ function App() {
       return;
     }
 
-    setInfoLoading(true);
-    setFeaturesLoading(true);
-    setError("");
-
-    // Clear data belonging to previously selected battery.
-    setBatteryInfo(null);
-    setBatteryHistory(null);
-    setLatestFeatures(null);
-
-    setSohPrediction(null);
-    setSohLoading(false);
-    setSohError("");
-
-    setRulPrediction(null);
-    setRulLoading(false);
-    setRulError("");
-
-    setFeatureContributions([]);
-    setShapLoading(false);
-    setShapError("");
+    let cancelled = false;
 
     Promise.all([
       getBatteryInfo(selectedBattery),
@@ -143,6 +171,10 @@ function App() {
       getLatestFeatures(selectedBattery),
     ])
       .then(([info, history, featureData]) => {
+        if (cancelled) {
+          return;
+        }
+
         console.log(
           "Selected battery information:",
           info
@@ -163,6 +195,10 @@ function App() {
         setLatestFeatures(featureData);
       })
       .catch((err) => {
+        if (cancelled) {
+          return;
+        }
+
         console.error(
           "Selected battery data error:",
           err
@@ -175,11 +211,11 @@ function App() {
         setError(
           "Unable to load selected battery data."
         );
-      })
-      .finally(() => {
-        setInfoLoading(false);
-        setFeaturesLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedBattery]);
 
   // ============================================================
@@ -197,127 +233,104 @@ function App() {
     }
 
     const cycle = latestFeatures.cycle;
+    const features = { ...latestFeatures.features };
+    delete features.battery_id;
 
-    /*
-     * The latest-features endpoint also returns battery_id
-     * inside the feature object.
-     *
-     * battery_id is NOT part of CycleFeatures, so remove it
-     * before sending the feature vector to the ML APIs.
-     */
-    const {
-      battery_id: _batteryId,
-      ...features
-    } = latestFeatures.features;
+    let cancelled = false;
 
-    // ==========================================================
-    // SOH prediction
-    // ==========================================================
+    const runPredictions = async () => {
+      const rulPromise = batteryInfo.is_rul_valid
+        ? getRulPrediction(
+            selectedBattery,
+            "xgboost",
+            features
+          )
+        : Promise.resolve(null);
 
-    setSohLoading(true);
-    setSohError("");
+      const [sohResult, rulResult, shapResult] =
+        await Promise.allSettled([
+          getSohPrediction(
+            selectedBattery,
+            cycle,
+            features
+          ),
+          rulPromise,
+          getShapExplanation(
+            selectedBattery,
+            cycle,
+            features
+          ),
+        ]);
 
-    getSohPrediction(
-      selectedBattery,
-      cycle,
-      features
-    )
-      .then((data) => {
+      if (cancelled) {
+        return;
+      }
+
+      // --------------------------------------------------------
+      // SOH prediction
+      // --------------------------------------------------------
+
+      if (sohResult.status === "fulfilled") {
         console.log(
           "SOH prediction:",
-          data
+          sohResult.value
         );
 
-        setSohPrediction(data);
-      })
-      .catch((err) => {
+        setSohPrediction(sohResult.value);
+        setSohError("");
+      } else {
         console.error(
           "SOH prediction error:",
-          err
+          sohResult.reason
         );
 
         setSohPrediction(null);
-
         setSohError(
-          err.message ||
+          sohResult.reason?.message ||
             "SOH prediction failed."
         );
-      })
-      .finally(() => {
-        setSohLoading(false);
-      });
+      }
 
-    // ==========================================================
-    // RUL prediction
-    // ==========================================================
-    //
-    // B0007 and any other right-censored battery must NOT
-    // receive an artificial RUL prediction.
-    //
+      // --------------------------------------------------------
+      // RUL prediction
+      // --------------------------------------------------------
 
-    if (batteryInfo.is_rul_valid) {
-      setRulLoading(true);
-      setRulError("");
+      if (!batteryInfo.is_rul_valid) {
+        /*
+         * Right-censored battery:
+         * no artificial RUL prediction.
+         */
+        setRulPrediction(null);
+        setRulError("");
+      } else if (rulResult.status === "fulfilled") {
+        console.log(
+          "RUL prediction:",
+          rulResult.value
+        );
 
-      /*
-       * XGBoost uses a single cycle feature vector,
-       * which matches the latest complete feature row.
-       */
-      getRulPrediction(
-        selectedBattery,
-        "xgboost",
-        features
-      )
-        .then((data) => {
-          console.log(
-            "RUL prediction:",
-            data
-          );
+        setRulPrediction(rulResult.value);
+        setRulError("");
+      } else {
+        console.error(
+          "RUL prediction error:",
+          rulResult.reason
+        );
 
-          setRulPrediction(data);
-        })
-        .catch((err) => {
-          console.error(
-            "RUL prediction error:",
-            err
-          );
+        setRulPrediction(null);
+        setRulError(
+          rulResult.reason?.message ||
+            "RUL prediction failed."
+        );
+      }
 
-          setRulPrediction(null);
+      // --------------------------------------------------------
+      // SHAP explanation
+      // --------------------------------------------------------
 
-          setRulError(
-            err.message ||
-              "RUL prediction failed."
-          );
-        })
-        .finally(() => {
-          setRulLoading(false);
-        });
-    } else {
-      /*
-       * Right-censored battery:
-       * no artificial RUL prediction.
-       */
-      setRulPrediction(null);
-      setRulLoading(false);
-      setRulError("");
-    }
-
-    // ==========================================================
-    // SHAP explanation
-    // ==========================================================
-
-    setShapLoading(true);
-    setShapError("");
-
-    getShapExplanation(
-      selectedBattery,
-      cycle,
-      features
-    )
-      .then((data) => {
+      if (shapResult.status === "fulfilled") {
         console.log(
           "SHAP explanation:",
-          data
+          shapResult.value
         );
 
         /*
@@ -334,7 +347,7 @@ function App() {
          */
 
         const contributions = Object.entries(
-          data.feature_contributions || {}
+          shapResult.value.feature_contributions || {}
         )
           .map(([feature, values]) => ({
             feature,
@@ -351,31 +364,63 @@ function App() {
               Math.abs(a.shap_value)
           );
 
-        setFeatureContributions(
-          contributions
-        );
-      })
-      .catch((err) => {
+        setFeatureContributions(contributions);
+        setShapError("");
+        setShapReady(true);
+      } else {
         console.error(
           "SHAP explanation error:",
-          err
+          shapResult.reason
         );
 
         setFeatureContributions([]);
-
         setShapError(
-          err.message ||
+          shapResult.reason?.message ||
             "SHAP explanation failed."
         );
-      })
-      .finally(() => {
-        setShapLoading(false);
-      });
+        setShapReady(true);
+      }
+    };
 
+    runPredictions().catch((err) => {
+      if (cancelled) {
+        return;
+      }
+
+      console.error(
+        "Unexpected prediction error:",
+        err
+      );
+
+      setSohPrediction(null);
+      setSohError(
+        err.message ||
+          "Prediction request failed."
+      );
+
+      if (batteryInfo.is_rul_valid) {
+        setRulPrediction(null);
+        setRulError(
+          err.message ||
+            "RUL prediction failed."
+        );
+      }
+
+      setFeatureContributions([]);
+      setShapError(
+        err.message ||
+          "SHAP explanation failed."
+      );
+      setShapReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     selectedBattery,
     latestFeatures,
-    batteryInfo?.is_rul_valid,
+    batteryInfo,
   ]);
 
   // ============================================================
@@ -449,11 +494,7 @@ function App() {
             <select
               id="battery-select"
               value={selectedBattery}
-              onChange={(event) =>
-                setSelectedBattery(
-                  event.target.value
-                )
-              }
+              onChange={handleBatteryChange}
             >
               {batteries.map((battery) => (
                 <option
