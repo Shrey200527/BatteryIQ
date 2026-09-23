@@ -28,12 +28,39 @@ def battery_exists(battery_id):
     return battery_id in targets_df["battery_id"].unique()
 
 def get_battery_history(battery_id):
-    """Return capacity and SOH history for one battery."""
-    battery_data = targets_df[
-        targets_df["battery_id"] == battery_id
-    ].sort_values("cycle")
+    """Return dashboard-ready cycle history for one battery.
 
-    return battery_data.to_dict(orient="records")
+    Combines approved target data (capacity, SOH) with
+    approved cycle-level feature data (voltage, current,
+    temperature) using battery_id + cycle as the join key.
+    """
+
+    target_data = targets_df[
+        targets_df["battery_id"] == battery_id
+    ][
+        ["battery_id", "cycle", "capacity", "soh"]
+    ]
+
+    feature_columns = [
+        "battery_id",
+        "cycle",
+        "voltage_mean",
+        "current_mean",
+        "temperature_mean",
+    ]
+
+    feature_data = features_df[
+        features_df["battery_id"] == battery_id
+    ][feature_columns]
+
+    history = target_data.merge(
+        feature_data,
+        on=["battery_id", "cycle"],
+        how="inner",
+        validate="one_to_one",
+    ).sort_values("cycle")
+
+    return history.to_dict(orient="records")
 
 
 def get_soh_history(battery_id):
