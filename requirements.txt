@@ -7,3 +7,8 @@ xgboost
 tensorflow
 jupyter
 shap
+fastapi
+uvicorn
+pydantic
+pytest
+httpx
