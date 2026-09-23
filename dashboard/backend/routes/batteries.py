@@ -15,6 +15,7 @@ from dashboard.backend.schemas import (
     ErrorResponse
 )
 from dashboard.backend.services import get_battery_service
+from dashboard.data.interface import get_battery_history as get_dashboard_battery_history
 
 router = APIRouter(prefix="/api/batteries", tags=["batteries"])
 
@@ -98,13 +99,14 @@ async def get_battery_detail(battery_id: str):
 @router.get("/{battery_id}/history")
 async def get_battery_history(battery_id: str):
     """
-    Get historical data for a specific battery.
-    
-    Returns available cycles and SOH progression.
+    Get dashboard-ready historical data for a specific battery.
+
+    Returns cycle-wise capacity, SOH, voltage, current,
+    and temperature data.
     """
     try:
         battery_service = get_battery_service()
-        
+
         if not battery_service.validate_battery_id(battery_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -113,17 +115,19 @@ async def get_battery_history(battery_id: str):
                     "message": f"Battery {battery_id} is not available"
                 }
             )
-        
+
         detail = battery_service.get_battery_detail(battery_id)
-        
+        history = get_dashboard_battery_history(battery_id)
+
         return {
             "battery_id": battery_id,
             "total_cycles": detail["total_cycles"],
             "available_cycles": detail["available_cycles"],
             "soh_range": detail["soh_range"],
-            "is_rul_valid": detail["is_rul_valid"]
+            "is_rul_valid": detail["is_rul_valid"],
+            "history": history,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -131,7 +135,9 @@ async def get_battery_history(battery_id: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error": "internal_error",
-                "message": f"Failed to retrieve history for battery {battery_id}",
+                "message": (
+                    f"Failed to retrieve history for battery {battery_id}"
+                ),
                 "details": str(e)
             }
         )
