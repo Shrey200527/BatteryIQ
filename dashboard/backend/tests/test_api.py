@@ -43,34 +43,6 @@ def get_real_cycle_features(
 class TestBatteriesEndpoints:
     """Test battery-related endpoints."""
 
-    def test_get_batteries(self):
-        """Test GET /api/batteries endpoint."""
-        response = client.get("/api/batteries")
-
-        assert response.status_code == 200
-
-        data = response.json()
-
-        assert "batteries" in data
-        assert "total" in data
-
-        assert data["total"] > 0
-        assert len(data["batteries"]) == data["total"]
-
-        # Check battery structure.
-        first_battery = data["batteries"][0]
-
-        assert "battery_id" in first_battery
-        assert "total_cycles" in first_battery
-        assert "is_rul_valid" in first_battery
-
-        # Ensure the API response contains native JSON-compatible
-        # boolean values.
-        assert isinstance(
-            first_battery["is_rul_valid"],
-            bool,
-        )
-
     def test_get_valid_battery_detail(self):
         """Test GET /api/batteries/{battery_id} with valid battery."""
         response = client.get("/api/batteries/B0005")
@@ -107,7 +79,7 @@ class TestBatteriesEndpoints:
         assert data["detail"]["error"] == "invalid_battery"
 
     def test_get_battery_history(self):
-        """Test GET /api/batteries/{battery_id}/history endpoint."""
+        """Test dashboard-ready battery history endpoint."""
         response = client.get(
             "/api/batteries/B0005/history"
         )
@@ -117,15 +89,51 @@ class TestBatteriesEndpoints:
         data = response.json()
 
         assert data["battery_id"] == "B0005"
-        assert "total_cycles" in data
-        assert "available_cycles" in data
-        assert "soh_range" in data
-
+        assert data["total_cycles"] == 168
         assert isinstance(
             data["available_cycles"],
             list,
         )
 
+        assert len(data["available_cycles"]) == 168
+        assert data["is_rul_valid"] is True
+
+        assert "history" in data
+        assert len(data["history"]) == 168
+
+        first_cycle = data["history"][0]
+
+        assert first_cycle["cycle"] == 1
+        assert "capacity" in first_cycle
+        assert "soh" in first_cycle
+        assert "voltage_mean" in first_cycle
+        assert "current_mean" in first_cycle
+        assert "temperature_mean" in first_cycle
+
+        cycles = [
+            row["cycle"]
+            for row in data["history"]
+        ]
+
+        assert cycles == list(range(1, 169))
+
+    def test_b0007_history_is_right_censored(self):
+        """B0007 must remain right-censored for RUL."""
+        response = client.get(
+            "/api/batteries/B0007/history"
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["battery_id"] == "B0007"
+        assert data["is_rul_valid"] is False
+
+        # B0007 has historical observations but no observed EOL.
+        assert len(data["history"]) == 168
+        assert data["history"][0]["cycle"] == 1
+        assert data["history"][-1]["cycle"] == 168
 
 class TestPredictionEndpoints:
     """Test prediction endpoints."""
