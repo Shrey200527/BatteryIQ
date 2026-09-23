@@ -15,7 +15,10 @@ from dashboard.backend.schemas import (
     ErrorResponse
 )
 from dashboard.backend.services import get_battery_service
-from dashboard.data.interface import get_battery_history as get_dashboard_battery_history
+from dashboard.data.interface import (
+    get_battery_history as get_dashboard_battery_history,
+    get_latest_features,
+)
 
 router = APIRouter(prefix="/api/batteries", tags=["batteries"])
 
@@ -140,4 +143,60 @@ async def get_battery_history(battery_id: str):
                 ),
                 "details": str(e)
             }
+        )
+@router.get("/{battery_id}/latest-features")
+async def get_battery_latest_features(battery_id: str):
+    """
+    Get the latest complete feature vector for a specific battery.
+
+    Returns the cycle-level features required by the ML inference APIs.
+    """
+    try:
+        battery_service = get_battery_service()
+
+        if not battery_service.validate_battery_id(battery_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "invalid_battery",
+                    "message": f"Battery {battery_id} is not available",
+                },
+            )
+
+        features = get_latest_features(battery_id)
+
+        if features is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": "features_unavailable",
+                    "message": f"No feature data found for battery {battery_id}",
+                },
+            )
+
+        # Convert NumPy scalar values to native Python values for JSON.
+        features = {
+            key: value.item() if hasattr(value, "item") else value
+            for key, value in features.items()
+        }
+
+        return {
+            "battery_id": battery_id,
+            "cycle": int(features.pop("cycle")),
+            "features": features,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "internal_error",
+                "message": (
+                    f"Failed to retrieve latest features for battery "
+                    f"{battery_id}"
+                ),
+                "details": str(e),
+            },
         )
